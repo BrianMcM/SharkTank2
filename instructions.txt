@@ -1,0 +1,21 @@
+
+mvn clean package
+
+mvn spring-boot:run -pl broker 
+
+mvn spring-boot:run -pl node -Dspring-boot.run.arguments=--server.port=8081 
+
+mvn spring-boot:run -pl node -Dspring-boot.run.arguments=--server.port=8082 
+
+mvn spring-boot:run -pl client
+
+client url 
+http://localhost:8083
+
+Can see video here for some reason media player isn't working rn but u can see the bytes receive and mp4 get constructed in static folder
+
+Can view video at this url which fetches it from static folder(it's not embedding in media player idk why)
+http://localhost:8083/video/play/sample
+
+
+NOTE: Had to run "mvn clean install" also

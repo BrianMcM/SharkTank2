@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Video Streamer</title>
+    <link rel="icon" href="data:,">
+    <style>
+        body {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background-color: #4CAF50;
+            width: 0%;
+            transition: width 0.5s ease-in-out;
+        }
+        video {
+            width: 100%;
+            max-height: 70vh;
+            margin-top: 20px;
+            background-color: #000;
+            border-radius: 8px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .nodes-list {
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .nodes-list h3 {
+            margin-top: 0;
+        }
+        .node-item {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+<h1>Video Streamer</h1>
+
+<select id="videoSelect"></select>
+
+<button id="loadButton" onclick="loadVideo()">Load Video</button>
+
+<div class="status" id="status">Status: Waiting to start...</div>
+<div class="progress-bar">
+    <div class="progress-bar-fill" id="progressBar"></div>
+</div>
+
+<div class="nodes-list" id="nodesList">
+    <h3>Nodes Sending Content:</h3>
+    <div id="nodesContainer"></div>
+</div>
+
+<video id="videoPlayer" controls></video>
+
+<script>
+    const videoPlayer = document.getElementById('videoPlayer');
+    const loadButton = document.getElementById('loadButton');
+    const progressBar = document.getElementById('progressBar');
+    const videoSelect = document.getElementById('videoSelect');
+    const nodesContainer = document.getElementById('nodesContainer');
+    let pollInterval;
+
+    function updateStatus(message, progress = 0) {
+        document.getElementById('status').textContent = message;
+        progressBar.style.width = `${progress * 100}%`;
+    }
+
+    function addNodeToList(nodeUrl) {
+        const nodeItem = document.createElement('div');
+        nodeItem.className = 'node-item';
+        nodeItem.textContent = `Node: ${nodeUrl}`;
+        nodesContainer.appendChild(nodeItem);
+        return nodeItem;
+    }
+
+    async function populateVideoDropdown() {
+        try {
+            const response = await fetch('http://localhost:8080/videos');
+            if (!response.ok) {
+                throw new Error('Failed to fetch video list');
+            }
+
+            const videos = await response.json();
+            videos.forEach(video => {
+                const option = document.createElement('option');
+                option.value = video;
+                option.textContent = video;
+                videoSelect.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error populating video dropdown:', error);
+            updateStatus('Error fetching video list');
+        }
+    }
+
+    async function loadVideo() {
+        console.log('Starting load video process');
+
+        const videoId = videoSelect.value;
+        loadButton.disabled = true;
+        updateStatus('Status: Requesting node assignments...', 0);
+
+        const videoRequest = {
+            videoId: videoId,
+            clientCallback: "http://localhost:8083/video/chunk"
+        };
+
+        try {
+            // Get node assignments from broker
+            const assignmentsResponse = await fetch('http://localhost:8080/broker/get-nodes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(videoRequest)
+            });
+
+            if (!assignmentsResponse.ok) {
+                throw new Error('Failed to get node assignments');
+            }
+
+            const assignments = await assignmentsResponse.json();
+            console.log('Received node assignments:', assignments);
+            updateStatus('Status: Requesting video chunks from nodes...', 0.1);
+
+            // Clear existing node list
+            nodesContainer.innerHTML = '';
+
+            // Request chunks from each node
+            const nodeRequests = assignments.map(async assignment => {
+                const streamRequest = {
+                    videoId: videoRequest.videoId,
+                    startPosition: assignment.startPosition,
+                    endPosition: assignment.endPosition,
+                    clientCallback: videoRequest.clientCallback +
+                        `?total=${assignment.total}&position=${assignment.position}`
+                };
+
+                try {
+                    await fetch(`${assignment.nodeUrl}/node/stream`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(streamRequest)
+                    });
+                    console.log(`Request sent to node: ${assignment.nodeUrl}`);
+                    const nodeItem = addNodeToList(assignment.nodeUrl);
+                } catch (error) {
+                    console.error(`Error requesting from node ${assignment.nodeUrl}:`, error);
+                    throw error;
+                }
+            });
+
+            await Promise.all(nodeRequests);
+            console.log('All node requests sent successfully');
+            updateStatus('Status: Receiving video chunks...', 0.2);
+            startPolling();
+
+        } catch (error) {
+            console.error('Error in video request:', error);
+            updateStatus('Status: Error requesting video: ' + error);
+            loadButton.disabled = false;
+        }
+    }
+
+    function startPolling() {
+        let attempts = 0;
+        const maxAttempts = 60;
+        clearInterval(pollInterval);
+    
+        pollInterval = setInterval(() => {
+            attempts++;
+            fetch('http://localhost:8083/video/status')
+                .then(response => response.json())
+                .then(status => {
+                    console.log('Status check:', status);
+    
+                    let progress = status.progress || 0;
+                    progress = 0.2 + (progress * 0.8);
+                    updateStatus(`Status: ${status.complete ? 'Loading video...' : 'Receiving video data...'}`, progress);
+    
+                    // Mark all nodes as "Done!" when the video is fully loaded
+                    if (status.complete) {
+                        clearInterval(pollInterval);
+                        videoPlayer.src = `http://localhost:8083/video/play/${videoSelect.value}`;
+                        loadButton.disabled = false;
+                        updateStatus('Status: Video ready!', 1);
+    
+                        // Update nodes with "Done!"
+                        const nodeItems = document.querySelectorAll('.node-item');
+                        nodeItems.forEach(nodeItem => {
+                            if (!nodeItem.textContent.includes('Done!')) {
+                                nodeItem.textContent += ' - Done!';
+                            }
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Status check error:', error);
+                    updateStatus('Status: Error checking video status: ' + error);
+                });
+    
+            if (attempts >= maxAttempts) {
+                clearInterval(pollInterval);
+                updateStatus('Status: Timeout waiting for video');
+                loadButton.disabled = false;
+            }
+        }, 1000);
+    }
+    
+
+    // Populate the dropdown on page load
+    populateVideoDropdown();
+</script>
+</body>
+</html>
