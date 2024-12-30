@@ -14,7 +14,7 @@ import java.util.Random;
 public class NodeVideoService {
     private static final Logger logger = LoggerFactory.getLogger(NodeVideoService.class);
     private final RestTemplate restTemplate;
-    private static final String VIDEO_PATH = "src/main/resources/videos/";
+    private static final String VIDEO_PATH = "/app/videos/";
     private static final int CHUNK_SIZE = 1024 * 1024; // 1MB chunks
 
     // Random throttling parameters
@@ -29,12 +29,17 @@ public class NodeVideoService {
         // Assign a random base throttle time to this node
         this.baseThrottleMs = MIN_THROTTLE + random.nextInt(MAX_THROTTLE - MIN_THROTTLE);
         logger.info("Node initialized with base throttle of {}ms", baseThrottleMs);
-
+    
         File videoDir = new File(VIDEO_PATH);
-        boolean created = videoDir.mkdirs();
-        logger.info("Video directory: {} (Created: {})", videoDir.getAbsolutePath(), created);
+    
+        if (!videoDir.exists()) {
+            boolean created = videoDir.mkdirs();
+            logger.info("Video directory: {} (Created: {})", videoDir.getAbsolutePath(), created);
+        } else {
+            logger.info("Video directory already exists: {}", videoDir.getAbsolutePath());
+        }
     }
-
+    
     private long getRandomizedDelay() {
         // Add random variation of ±30% to the base throttle
         double variation = 1.0 + (random.nextDouble() * VARIATION_FACTOR * 2 - VARIATION_FACTOR);

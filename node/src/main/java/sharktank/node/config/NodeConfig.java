@@ -18,13 +18,10 @@ import java.util.stream.Collectors;
 public class NodeConfig {
     private static final Logger logger = LoggerFactory.getLogger(NodeConfig.class);
 
-    @Value("${server.port}")
-    private String serverPort;
-
-    @Value("${broker.url:http://localhost:8080}")
+    @Value("${broker.url:http://broker:8080}")
     private String brokerUrl;
 
-    private static final Path VIDEO_DIR = Paths.get("src/main/resources/videos");
+    private static final Path VIDEO_DIR = Paths.get("/app/videos");
 
     private final RestTemplate restTemplate;
 
@@ -34,27 +31,44 @@ public class NodeConfig {
 
     @PostConstruct
     public void registerWithBroker() {
-        String nodeUrl = "http://localhost:" + serverPort;
+        String nodeUrl = "http://localhost:" + System.getenv("NODE_PORT");
 
         // Collect the available videos
         List<String> availableVideos = getAvailableVideos();
 
         NodeRegistration registration = new NodeRegistration(nodeUrl, null, 100, availableVideos);
 
-        try {
-            ResponseEntity<Map> response = restTemplate.postForEntity(
-                    brokerUrl + "/broker/register",
-                    registration,
-                    Map.class
-            );
+        int maxRetries = 5; // Maximum number of retries
+        int delayInMillis = 3000; // Delay between retries in milliseconds
 
-            String nodeId = ((Map) response.getBody()).get("nodeId").toString();
-            logger.info("Successfully registered with broker. Node ID: {}", nodeId);
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                ResponseEntity<Map> response = restTemplate.postForEntity(
+                        brokerUrl + "/broker/register",
+                        registration,
+                        Map.class
+                );
 
-            startHeartbeat(nodeId);
-        } catch (Exception e) {
-            logger.error("Failed to register with broker", e);
-            throw new RuntimeException("Node registration failed", e);
+                String nodeId = ((Map) response.getBody()).get("nodeId").toString();
+                logger.info("Successfully registered with broker. Node ID: {}", nodeId);
+
+                startHeartbeat(nodeId);
+                return; // Exit method if registration is successful
+            } catch (Exception e) {
+                if (attempt < maxRetries) {
+                    logger.warn("Attempt {} to register with broker failed. Retrying in {}ms...", attempt, delayInMillis, e);
+                    try {
+                        Thread.sleep(delayInMillis); // Wait before retrying
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt(); // Restore interrupted status
+                        logger.error("Retry sleep interrupted", ie);
+                        throw new RuntimeException("Node registration interrupted", ie);
+                    }
+                } else {
+                    logger.error("Failed to register with broker after {} attempts", maxRetries, e);
+                    throw new RuntimeException("Node registration failed after multiple attempts", e);
+                }
+            }
         }
     }
 

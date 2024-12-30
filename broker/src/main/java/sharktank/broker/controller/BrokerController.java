@@ -35,15 +35,17 @@ public class BrokerController {
         return ResponseEntity.ok().build();
     }
 
+    @CrossOrigin(origins = "http://localhost:8083")
     @PostMapping("/broker/get-nodes")
     public ResponseEntity<?> getNodesForVideo(@RequestBody VideoRequest request) {
         List<NodeRegistration> nodes = nodeRegistry.getActiveNodes();
         if (nodes.isEmpty()) {
+            System.out.println("nodes is empty");
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body("No nodes available");
         }
-
         List<NodeAssignment> assignments = calculateNodeAssignments(nodes);
+        System.out.println("nodes success");
         return ResponseEntity.ok(assignments);
     }
 

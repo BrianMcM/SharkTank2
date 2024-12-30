@@ -26,13 +26,15 @@ public class VideoController {
 	private static final Logger logger = LoggerFactory.getLogger(VideoController.class);
 	private final Map<String, ChunkAssembler> videoAssemblers = new ConcurrentHashMap<>();
 	private static final String SAVE_PATH = Paths.get("").toAbsolutePath()
-			.resolve("src/main/resources/static/videos/").toString();
+			.resolve("videos/").toString();
 	private static final long CHUNK_SIZE = 1024 * 1024; // 1MB chunk size
+
+	private String vidID = "";
 
 	@GetMapping("/video/status")
 	public ResponseEntity<?> getVideoStatus(@RequestParam(required = false) String videoId) {
 		Map<String, Object> status = new HashMap<>();
-		String vid = videoId != null ? videoId : "sample";
+		String vid = vidID;
 		ChunkAssembler assembler = videoAssemblers.get(vid);
 
 		if (assembler != null) {
@@ -42,6 +44,7 @@ public class VideoController {
 			status.put("expectedSize", assembler.getExpectedSize());
 		} else {
 			Path videoPath = Paths.get(SAVE_PATH, vid + ".mp4");
+			System.out.println(videoPath);
 			if (Files.exists(videoPath)) {
 				try {
 					long size = Files.size(videoPath);
@@ -63,6 +66,7 @@ public class VideoController {
 
 		return ResponseEntity.ok(status);
 	}
+		
 
 	@GetMapping("/video/play/{videoId}")
 	public ResponseEntity<ResourceRegion> playVideo(
@@ -135,6 +139,8 @@ public class VideoController {
 
 		logger.info("Received chunk - VideoId: {}, Position: {}/{}, Size: {} bytes",
 				videoId, position, total, chunk.length);
+		
+		vidID = videoId;
 
 		ChunkAssembler assembler = videoAssemblers.computeIfAbsent(videoId,
 				id -> new ChunkAssembler(fileSize));
