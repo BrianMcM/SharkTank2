@@ -131,6 +131,8 @@
 
     async function loadVideo() {
         console.log('Starting load video process');
+        let startTime = Date.now();
+
 
         const videoId = videoSelect.value;
         loadButton.disabled = true;
@@ -163,6 +165,11 @@
             nodesContainer.innerHTML = '';
 
             // Request chunks from each node
+
+
+
+
+
             const nodeRequests = assignments.map(async assignment => {
                 const streamRequest = {
                     videoId: videoRequest.videoId,
@@ -198,6 +205,8 @@
             updateStatus('Status: Error requesting video: ' + error);
             loadButton.disabled = false;
         }
+        const elapsedTime = ((Date.now() - startTime) / 1000);
+        console.log(elapsedTime)
     }
 
     function startPolling() {
@@ -248,6 +257,21 @@
 
     // Populate the dropdown on page load
     populateVideoDropdown();
+    async function runMultipleTests() {
+        const elapsedTimes = [];
+
+        for (let i = 0; i < 10; i++) {
+            console.log(`Starting test run ${i + 1}`);
+            await loadVideo(); // Wait for loadVideo to complete
+            const elapsedTime = parseFloat(document.getElementById('elapsedTime').textContent);
+            elapsedTimes.push(elapsedTime); // Collect elapsed time
+        }
+
+        console.log('Test runs complete:', elapsedTimes);
+    }
+    // setTimeout(() => {
+    //     runMultipleTests();
+    // }, 5000);
 </script>
 </body>
 </html>

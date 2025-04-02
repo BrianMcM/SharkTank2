@@ -27,7 +27,7 @@ services:
     depends_on:
       - broker
     volumes:
-      - ./node/src/main/resources/videos:/app/videos
+      - ./node/src/main/resources/videos:/app/videos:rw
 
   node2:
     build:
@@ -41,7 +41,62 @@ services:
     depends_on:
       - broker
     volumes:
-      - ./node/src/main/resources/videos:/app/videos
+      - ./node/src/main/resources/videos:/app/videos:rw
+
+  node3:
+    build:
+      context: ./node
+    environment:
+      - NODE_PORT=8084
+    ports:
+      - "8084:8081"
+    networks:
+      - dist_net
+    depends_on:
+      - broker
+    volumes:
+      - ./node/src/main/resources/videos:/app/videos:rw
+
+  node4:
+    build:
+      context: ./node
+    environment:
+      - NODE_PORT=8085
+    ports:
+      - "8085:8081"
+    networks:
+      - dist_net
+    depends_on:
+      - broker
+    volumes:
+      - ./node/src/main/resources/videos:/app/videos:rw
+
+  node5:
+    build:
+      context: ./node
+    environment:
+      - NODE_PORT=8086
+    ports:
+      - "8086:8081"
+    networks:
+      - dist_net
+    depends_on:
+      - broker
+    volumes:
+      - ./node/src/main/resources/videos:/app/videos:rw
+  node6:
+    build:
+      context: ./node
+    environment:
+      - NODE_PORT=8087
+    ports:
+      - "8087:8081"
+    networks:
+      - dist_net
+    depends_on:
+      - broker
+    volumes:
+      - ./node/src/main/resources/videos:/app/videos:rw
 
 networks:
   dist_net:
